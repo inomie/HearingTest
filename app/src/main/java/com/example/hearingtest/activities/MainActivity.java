@@ -14,6 +14,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
 
+import com.example.hearingtest.adapters.WaveHeader;
 import com.example.hearingtest.databinding.ActivityMainBinding;
 
 import java.io.ByteArrayOutputStream;
@@ -36,6 +37,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private byte[] gap10ms;
     private byte[] gap5ms;
     private String pathWav;
+    private WaveHeader waveHeader;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         gap10ms = new byte[960];
         gap5ms = new byte[480];
         pathWav = "/storage/emulated/0/Download/test.wav";
+        waveHeader = new WaveHeader();
     }
 
     /**
@@ -151,8 +154,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             outputStream.write(wavData, 44, wavData.length);
             outputStream.write(gap, 0, gap.length);
             outputStream.write(toneArray, 46, toneArray.length);
-
-
             byte[] combined = outputStream.toByteArray( );
             outputStream.flush();
             outputStream.close();

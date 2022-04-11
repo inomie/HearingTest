@@ -3,10 +3,8 @@ package com.example.hearingtest.activities;
 import androidx.annotation.RawRes;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.annotation.SuppressLint;
 import android.media.MediaPlayer;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -21,6 +19,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -82,7 +81,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     /**
-     * Will calculate the decibel ...
+     * Will calculate the decibel
      * @param L_out The value of the new decibel level
      * @return decibel ...
      */
@@ -103,7 +102,12 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     public boolean onTouch(View v, MotionEvent event) {
 
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
-
+            byte[] bytes = waveHeader.createWaveHeader();
+            String string = new String(bytes);
+            showToast(string);
+            //ByteBuffer wrapped = ByteBuffer.wrap(bytes);
+            //int i = wrapped.getInt();
+            //showToast(Integer.toString(i));
         } else if (event.getAction() == MotionEvent.ACTION_UP) {
 
         }
@@ -159,7 +163,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             outputStream.close();
 
             // Create new header for combined
-
+            waveHeader.setSubChunk2Size((short)combined.length);
+            byte[] wavheader = waveHeader.createWaveHeader();
             // Create new wav file from combined byte[]
             File file = new File(pathWav);
 

@@ -5,7 +5,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
 import android.media.AudioManager;
-import android.media.AudioTrack;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,13 +18,10 @@ import com.example.hearingtest.R;
 import com.example.hearingtest.adapters.WaveHeader;
 import com.example.hearingtest.databinding.ActivityMainBinding;
 
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -143,6 +139,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     public void main(){
         executor.execute(() -> {
             //Do background work here
+
         });
         handler.post(() -> {
             //Do UI Thread work here
@@ -155,7 +152,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
      * @param tone The tone file.
      * @param gap The gap that is going to be between noise and tone.
      */
-    private void combineWavFile(@RawRes int noise, @RawRes int tone, byte[] gap) {
+    public void combineWavFile(@RawRes int noise, @RawRes int tone, byte[] gap) {
         try {
 
             // Read the byte's from wav to byte[] of noise.
@@ -207,6 +204,12 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
     }
 
+    /**
+     * Will multiply all the samples with the audio coefficient.
+     * @param audioSamples Byte array with all the audio samples in 2 bytes.
+     * @param volume The requested volume in decibel.
+     * @return a byte array with all the audio samples but with the new volume.
+     */
     private byte[] adjustVolume(byte[] audioSamples, int volume) {
         byte[] newAudio = new byte[audioSamples.length];
         for (int i = 0; i < newAudio.length; i += 2) {
@@ -234,3 +237,78 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         setMaxVolume();
     }
 }
+
+ /*
+    @SuppressLint("StaticFieldLeak")
+    public void start(){
+        asyncTask = new AsyncTask() {
+            @Override
+            protected Object doInBackground(Object[] objects) {
+                if(start){
+                    while(start) {
+
+                        play(R.raw.noise_500hz, 80);
+                        waitToFinish();
+                        SystemClock.sleep(80);
+                        play(R.raw.tone_500hz, 0);
+                        waitToFinish();
+                        SystemClock.sleep(100);
+
+                    }
+                }
+                return null;
+            }
+        }.execute();
+
+    }
+
+
+    private void play(@RawRes int sound, int volume) {
+        mediaPlayer.release();
+        mediaPlayer = MediaPlayer.create(this, sound);
+
+        if (volume > 0) {
+            mediaPlayer.setVolume(0, calculateDB(80));
+        } else if (volume == 0) {
+            if (test == 0) {
+                if(db < 85) {
+                    db += 5;
+                    mediaPlayer.setVolume(0, calculateDB(db));
+                } else {
+                    mediaPlayer.setVolume(0, calculateDB(db));
+                }
+
+            } else if(test == 1){
+
+                db -= 5;
+                mediaPlayer.setVolume(0, calculateDB(db));
+
+            }
+
+        }
+
+
+        mediaPlayer.start();
+    }
+
+    private void waitToFinish() {
+        while (mediaPlayer.isPlaying()) {
+
+        }
+    }
+
+    @Override
+    public boolean onTouch(View v, MotionEvent event) {
+        double Start = 0;
+        double End = 0;
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            start = true;
+            test = 1;
+            start();
+        } else if (event.getAction() == MotionEvent.ACTION_UP) {
+            start = true;
+            test = 0;
+            start();
+        }
+        return true;
+    }*/

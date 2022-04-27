@@ -4,6 +4,7 @@ import androidx.annotation.RawRes;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -45,6 +46,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private int decibelLevel;
     private boolean start;
     private boolean pressed = false;
+    private int clicked = 0;
+    private int[] values;
+    int sum = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +69,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             binding.pressButton.setVisibility(View.VISIBLE);
             start = true;
             main();
+
         });
     }
 
@@ -85,6 +90,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         setMaxVolume();
         decibelLevel = 80;
+        values = new int[4];
     }
 
     /**
@@ -129,10 +135,18 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             pressed = true;
+            if (clicked < 4) {
+                values[clicked] = decibelLevel;
+                clicked++;
+            }
+
 
         } else if (event.getAction() == MotionEvent.ACTION_UP) {
             pressed = false;
-
+            if (clicked < 4) {
+                values[clicked] = decibelLevel;
+                clicked++;
+            }
         }
         return true;
     }
@@ -151,21 +165,41 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private void main(){
         executor.execute(() -> {
             //Do background work here
-            while (start) {
+            while (start && clicked < 4) {
+                // Check if button is being pressed or not.
                 if (pressed) {
+                    // Reduce the decibel level.
                     decibelLevel -= 5;
                 } else if (decibelLevel < 80) {
+                    // Increase the decibel level.
                     decibelLevel += 5;
                 }
+                // Create the new wav file with correct decibel level on tone (ftm).
                 combineWavFile(R.raw.noise_500hz, R.raw.ftm_500hz, gap80ms, decibelLevel);
                 playSound(pathWav);
+                // Wait for mediaPlayer to finish.
                 waitToFinish();
                 SystemClock.sleep(80);
             }
 
+            // Calculate the threshold
+            for (int i = 0; i < 4; i++) {
+                sum += values[i];
+            }
+            sum = sum/4;
+
+            // Print the threshold.
+            MainActivity.this.runOnUiThread(new Runnable() {
+                public void run() {
+                    showToast(Integer.toString(sum));
+                }
+            });
+
+
         });
         handler.post(() -> {
             //Do UI Thread work here
+
         });
     }
 
@@ -274,79 +308,14 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         super.onResume();
         setMaxVolume();
     }
-}
 
- /*
-    @SuppressLint("StaticFieldLeak")
-    public void start(){
-        asyncTask = new AsyncTask() {
-            @Override
-            protected Object doInBackground(Object[] objects) {
-                if(start){
-                    while(start) {
-
-                        play(R.raw.noise_500hz, 80);
-                        waitToFinish();
-                        SystemClock.sleep(80);
-                        play(R.raw.tone_500hz, 0);
-                        waitToFinish();
-                        SystemClock.sleep(100);
-
-                    }
-                }
-                return null;
-            }
-        }.execute();
-
-    }
-
-
-    private void play(@RawRes int sound, int volume) {
-        mediaPlayer.release();
-        mediaPlayer = MediaPlayer.create(this, sound);
-
-        if (volume > 0) {
-            mediaPlayer.setVolume(0, calculateDB(80));
-        } else if (volume == 0) {
-            if (test == 0) {
-                if(db < 85) {
-                    db += 5;
-                    mediaPlayer.setVolume(0, calculateDB(db));
-                } else {
-                    mediaPlayer.setVolume(0, calculateDB(db));
-                }
-
-            } else if(test == 1){
-
-                db -= 5;
-                mediaPlayer.setVolume(0, calculateDB(db));
-
-            }
-
-        }
-
-
-        mediaPlayer.start();
-    }
-
-    private void waitToFinish() {
-        while (mediaPlayer.isPlaying()) {
-
-        }
+    @Override
+    protected void onPause() {
+        super.onPause();
     }
 
     @Override
-    public boolean onTouch(View v, MotionEvent event) {
-        double Start = 0;
-        double End = 0;
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            start = true;
-            test = 1;
-            start();
-        } else if (event.getAction() == MotionEvent.ACTION_UP) {
-            start = true;
-            test = 0;
-            start();
-        }
-        return true;
-    }*/
+    protected void onDestroy() {
+        super.onDestroy();
+    }
+}

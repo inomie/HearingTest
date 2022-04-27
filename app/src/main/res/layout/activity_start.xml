@@ -1,9 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/white"
     tools:context=".activities.StartActivity">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:textColor="@color/black"
+            android:layout_gravity="center"
+            android:textSize="@dimen/_15sdp"
+            android:text="The first test will be a temporal masking. The test will be playing a noise followed by a gap that is a certain amount of time long. After the gap a ftm tone will be played. If you can hear the ftm tone you will be pressing a button and holding it down until you cant hear the ftm tone any more and will then release the button."/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_20sdp"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:textColor="@color/black"
+            android:layout_gravity="center"
+            android:textSize="@dimen/_15sdp"
+            android:text="The second test will be a standard audiometry test. The test will be playing a tone followed by a gap that is the same length as the tone. If you can hear the tone you will be pressing the button and holding it down until you cant hear the tone anymore and will then release the button."/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_20sdp"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:textColor="@color/black"
+            android:layout_gravity="center"
+            android:textSize="@dimen/_15sdp"
+            android:text="You can test the noise and tone by pressing the buttons (noise, tone)."/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/noiseButton"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="@dimen/_15sdp"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:text="@string/noise"
+            app:cornerRadius="@dimen/_70sdp"
+            android:contentDescription="@null"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/toneButton"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:text="@string/tone"
+            app:cornerRadius="@dimen/_70sdp"
+            android:contentDescription="@null"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ftmButton"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:text="@string/ftm_tone"
+            app:cornerRadius="@dimen/_70sdp"
+            android:contentDescription="@null"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/nextButton"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="@dimen/_15sdp"
+            android:layout_marginRight="@dimen/_25sdp"
+            android:layout_marginLeft="@dimen/_25sdp"
+            android:text="@string/next"
+            app:cornerRadius="@dimen/_70sdp"
+            android:contentDescription="@null"/>
+
+    </LinearLayout>
+
+</ScrollView>

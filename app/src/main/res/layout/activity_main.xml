@@ -8,6 +8,7 @@
     android:overScrollMode="never"
     android:padding="@dimen/_24sdp"
     android:scrollbars="none"
+    android:background="@color/white"
     tools:context=".activities.MainActivity">
 
     <LinearLayout
@@ -16,12 +17,27 @@
         android:layout_gravity="center"
         android:orientation="vertical">
 
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/StartButton"
+            android:layout_width="@dimen/_120sdp"
+            android:layout_height="@dimen/_120sdp"
+            android:text="@string/start"
+            android:layout_marginTop="@dimen/_150sdp"
+            android:background="@drawable/roundedbutton"
+            android:layout_gravity="center"
+            app:cornerRadius="@dimen/_70sdp"
+            android:contentDescription="@null"/>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/pressButton"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="@dimen/_120sdp"
+            android:layout_height="@dimen/_120sdp"
+            android:layout_marginTop="@dimen/_50sdp"
+            android:layout_gravity="center"
             android:text="@string/press"
-            app:cornerRadius="@dimen/_70sdp"
+            android:visibility="gone"
+            android:background="@drawable/roundedbutton"
             android:contentDescription="@null"/>
 
     </LinearLayout>

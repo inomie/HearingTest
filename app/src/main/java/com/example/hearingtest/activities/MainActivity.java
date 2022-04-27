@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
@@ -41,6 +42,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private String pathWav;
     private WaveHeader waveHeader;
     private AudioManager audioManager;
+    private int decibelLevel;
+    private boolean start;
+    private boolean pressed = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,6 +60,12 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
      */
     private void setListeners() {
         binding.pressButton.setOnTouchListener(this);
+        binding.StartButton.setOnClickListener(v -> {
+            binding.StartButton.setVisibility(View.INVISIBLE);
+            binding.pressButton.setVisibility(View.VISIBLE);
+            start = true;
+            main();
+        });
     }
 
     /**
@@ -74,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         waveHeader = new WaveHeader();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         setMaxVolume();
+        decibelLevel = 80;
     }
 
     /**
@@ -91,6 +102,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private void playSound(String path) {
         mediaPlayer.release();
         mediaPlayer = MediaPlayer.create(this, Uri.parse(path));
+        mediaPlayer.setVolume(0,1);
         mediaPlayer.start();
     }
 
@@ -116,10 +128,10 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     public boolean onTouch(View v, MotionEvent event) {
 
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            combineWavFile(R.raw.noise_500hz, R.raw.ftm_500hz, gap80ms);
-            mediaPlayer = MediaPlayer.create(this, Uri.parse(pathWav));
-            mediaPlayer.start();
+            pressed = true;
+
         } else if (event.getAction() == MotionEvent.ACTION_UP) {
+            pressed = false;
 
         }
         return true;
@@ -136,9 +148,20 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     /**
      * The main program
      */
-    public void main(){
+    private void main(){
         executor.execute(() -> {
             //Do background work here
+            while (start) {
+                if (pressed) {
+                    decibelLevel -= 5;
+                } else if (decibelLevel < 80) {
+                    decibelLevel += 5;
+                }
+                combineWavFile(R.raw.noise_500hz, R.raw.ftm_500hz, gap80ms, decibelLevel);
+                playSound(pathWav);
+                waitToFinish();
+                SystemClock.sleep(80);
+            }
 
         });
         handler.post(() -> {
@@ -147,39 +170,53 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     /**
+     * A dummy function to make the program wait for mediaPlayer to finish.
+     */
+    private void waitToFinish() {
+        while (mediaPlayer.isPlaying()) {
+
+        }
+    }
+
+    /**
      * Will combine noise, gap and tone to one wav file.
      * @param noise The noise file.
      * @param tone The tone file.
      * @param gap The gap that is going to be between noise and tone.
      */
-    public void combineWavFile(@RawRes int noise, @RawRes int tone, byte[] gap) {
+    public void combineWavFile(@RawRes int noise, @RawRes int tone, byte[] gap, int dB) {
         try {
 
-            // Read the byte's from wav to byte[] of noise.
+            // Read the byte's from noiseWav to byte[].
             InputStream is = getResources().openRawResource(noise);
             byte[] wavData = new byte[is.available()];
             is.read(wavData);
             is.close();
 
-            // Read the byte's from wav to byte[] of tone.
+            // Read the byte's from toneWav to byte[].
             InputStream toneIs = getResources().openRawResource(tone);
             byte[] toneArray = new byte[toneIs.available()];
             toneIs.read(toneArray);
             toneIs.close();
 
-            toneArray = adjustVolume(toneArray, 30);
+            // Adjust the intensity of the tone with the correct decibel value.
+            toneArray = adjustVolume(toneArray, dB);
 
+            // Create a new byte[] and store noise, gap and tone in it without a header.
             byte[] combined = new byte[wavData.length - 44 + gap.length + toneArray.length - 46];
             ByteBuffer byteBuffer = ByteBuffer.wrap(combined);
             byteBuffer.put(wavData, 44, wavData.length - 44);
             byteBuffer.put(gap);
             byteBuffer.put(toneArray, 46, toneArray.length - 46);
 
-            // Create new header for combined
+            // Set the size of the data chunk and size of the full size of the file.
             waveHeader.setSubChunk2Size(combined.length);
             waveHeader.setChunkSize();
+
+            // Create a new header and store it in a byte[].
             byte[] bytes = waveHeader.createWaveHeader();
 
+            // Write header and the combined sounds to one byte[].
             ByteArrayOutputStream out = new ByteArrayOutputStream( );
             out.write(bytes);
             out.write(combined);
@@ -187,13 +224,14 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             out.flush();
             out.close();
 
-            // Create new wav file from combined byte[]
             File file = new File(pathWav);
 
+            // Check if file exists otherwise create file.
             if (!file.exists()) {
                 Boolean value = file.createNewFile();
             }
 
+            // Write to file.
             FileOutputStream stream = new FileOutputStream(pathWav);
             stream.write(sound);
             stream.close();

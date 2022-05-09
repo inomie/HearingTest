@@ -4,7 +4,6 @@ import androidx.annotation.RawRes;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
-import android.content.Intent;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -20,9 +19,12 @@ import com.example.hearingtest.R;
 import com.example.hearingtest.adapters.WaveHeader;
 import com.example.hearingtest.databinding.ActivityMainBinding;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -35,20 +37,23 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private MediaPlayer mediaPlayer;
     private ExecutorService executor;
     private Handler handler;
-    private byte[] gap80ms;
-    private byte[] gap40ms;
-    private byte[] gap20ms;
-    private byte[] gap10ms;
-    private byte[] gap5ms;
     private String pathWav;
     private WaveHeader waveHeader;
     private AudioManager audioManager;
     private int decibelLevel;
-    private boolean start;
     private boolean pressed = false;
     private int clicked = 0;
     private int[] values;
-    int sum = 0;
+    private int[] noiseSounds;
+    private int[] ftmTones;
+    private int[] tones;
+    private byte[][] gaps;
+    private int[] gapTimes;
+    private byte[] gap1s;
+    private static int[][] thresholdTemporalValuesRightEar;
+    private static int[][] thresholdTemporalValuesLeftEar;
+    private static int[] thresholdAudiometryRightEar;
+    private static int[] thresholdAudiometryLeftEar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,9 +72,22 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         binding.StartButton.setOnClickListener(v -> {
             binding.StartButton.setVisibility(View.INVISIBLE);
             binding.pressButton.setVisibility(View.VISIBLE);
-            start = true;
-            main();
-
+            temporalMaskingRightEar();
+        });
+        binding.StartAudioButton.setOnClickListener(v -> {
+            binding.StartAudioButton.setVisibility(View.GONE);
+            binding.pressButton.setVisibility(View.VISIBLE);
+            audiometryRightEar();
+        });
+        binding.StartTemporalButton.setOnClickListener(v -> {
+            binding.StartTemporalButton.setVisibility(View.GONE);
+            binding.pressButton.setVisibility(View.VISIBLE);
+            temporalMaskingLeftEar();
+        });
+        binding.StartLeftAudioButton.setOnClickListener(v -> {
+            binding.StartLeftAudioButton.setVisibility(View.GONE);
+            binding.pressButton.setVisibility(View.VISIBLE);
+            audiometryLeftEar();
         });
     }
 
@@ -80,17 +98,30 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         mediaPlayer = new MediaPlayer();
         executor = Executors.newSingleThreadExecutor();
         handler = new Handler(Looper.getMainLooper());
-        gap80ms = new byte[7680];
-        gap40ms = new byte[3840];
-        gap20ms = new byte[1920];
-        gap10ms = new byte[960];
-        gap5ms = new byte[480];
         pathWav = "/storage/emulated/0/Download/test.wav";
         waveHeader = new WaveHeader();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         setMaxVolume();
-        decibelLevel = 80;
-        values = new int[4];
+        decibelLevel = 50;
+        values = new int[5];
+        noiseSounds = new int[]{R.raw.noise_500hz, R.raw.noise_2000hz, R.raw.noise_4000hz};
+        ftmTones = new int[]{R.raw.ftm_500hz, R.raw.ftm_2000hz, R.raw.noise_4000hz};
+        tones = new int[]{R.raw.tone_1000hz, R.raw.tone_2000hz, R.raw.tone_3000hz,
+                R.raw.tone_4000hz, R.raw.tone_6000hz, R.raw.tone_8000hz, R.raw.tone_1000hz,
+                R.raw.tone_500hz, R.raw.tone_250hz
+        };
+        gaps = new byte[5][];
+        gaps[0] = new byte[7680];
+        gaps[1] = new byte[3840];
+        gaps[2] = new byte[1920];
+        gaps[3] = new byte[960];
+        gaps[4] = new byte[480];
+        gapTimes = new int[]{80, 40, 20, 10, 5};
+        gap1s = new byte[96000];
+        thresholdTemporalValuesRightEar = new int[3][5];
+        thresholdTemporalValuesLeftEar = new int[3][5];
+        thresholdAudiometryRightEar = new int[9];
+        thresholdAudiometryLeftEar = new int[9];
     }
 
     /**
@@ -99,16 +130,23 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private void setMaxVolume() {
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC,
                 audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC), 0);
-    };
+    }
 
     /**
      * Will release the last mediaPlayer and create a new one and play the sound.
      * @param path take the path of the sound file
      */
-    private void playSound(String path) {
+    private void playSoundRightEar(String path) {
         mediaPlayer.release();
         mediaPlayer = MediaPlayer.create(this, Uri.parse(path));
         mediaPlayer.setVolume(0,1);
+        mediaPlayer.start();
+    }
+
+    private void playSoundLeftEar(String path) {
+        mediaPlayer.release();
+        mediaPlayer = MediaPlayer.create(this, Uri.parse(path));
+        mediaPlayer.setVolume(1,0);
         mediaPlayer.start();
     }
 
@@ -135,16 +173,21 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             pressed = true;
-            if (clicked < 4) {
-                values[clicked] = decibelLevel;
+            if (clicked < 6) {
+                if (clicked != 0) {
+                    values[clicked - 1] = decibelLevel;
+                }
                 clicked++;
             }
 
 
         } else if (event.getAction() == MotionEvent.ACTION_UP) {
+            v.performClick();
             pressed = false;
-            if (clicked < 4) {
-                values[clicked] = decibelLevel;
+            if (clicked < 6) {
+                if (clicked != 0) {
+                    values[clicked - 1] = decibelLevel;
+                }
                 clicked++;
             }
         }
@@ -160,39 +203,230 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     /**
-     * The main program
+     * The main program for temporalMasking right ear
      */
-    private void main(){
+    private void temporalMaskingRightEar(){
         executor.execute(() -> {
-            //Do background work here
-            while (start && clicked < 4) {
-                // Check if button is being pressed or not.
-                if (pressed) {
+            int sum = 0;
+            // Loop through gaps
+            for (int i = 0; i < 5; i++) {
+
+                // Loop through sounds
+                for (int j = 0; j < 3; ) {
+
+
+                    // Stop thread if application is tabbed or backed out of
+                    if (Thread.currentThread().isInterrupted()){
+                        return;
+                    }
+
+                    // Check if user have pressed/released the button four times.
+                    if (clicked == 6) {
+
+                        // Calculate the threshold
+                        for (int k = 0; k < 5; k++) {
+                            sum += values[k];
+                        }
+                        sum = sum/5;
+
+                        // Add threshold to array to be saved.
+                        thresholdTemporalValuesRightEar[j][i] = sum;
+
+                        j++;
+                        clicked = 0;
+                        decibelLevel = 50;
+                        sum = 0;
+                        continue;
+                    }
+
+                    // Control if the user is pressing the button or not
+                    if (pressed && clicked < 2) {
+                        // Reduce the decibel level.
+                        decibelLevel -= 5;
+                    } else if (pressed && clicked >= 2) {
+                        decibelLevel -= 2;
+                    } else if (decibelLevel < 80 && clicked >= 2) {
+                        decibelLevel += 2;
+                    } else if (decibelLevel < 80) {
+                        // Increase the decibel level.
+                        decibelLevel += 5;
+                    }
+
+                    // Create the new wav file with correct decibel level on tone (ftm).
+                    combineWavFileTemporalMasking(noiseSounds[j], ftmTones[j], gaps[i], decibelLevel);
+                    playSoundRightEar(pathWav);
+
+                    // Wait for mediaPlayer to finish.
+                    waitToFinish();
+                    // Sleep for the same time as gap length.
+                    SystemClock.sleep(gapTimes[i]);
+                }
+            }
+
+            // Will print out all the thresholds values.
+            MainActivity.this.runOnUiThread(() -> {
+                for (int i = 0; i < 3 ; i++) {
+                    for (int j = 0; j < 5; j++) {
+                        showToast(Integer.toString(thresholdTemporalValuesRightEar[i][j]));
+                    }
+                }
+
+                binding.pressButton.setVisibility(View.GONE);
+                binding.StartAudioButton.setVisibility(View.VISIBLE);
+                binding.textField.setText("Audiometry, right ear");
+
+            });
+
+
+
+        });
+        handler.post(() -> {
+            //Do UI Thread work here
+
+        });
+    }
+
+    private void temporalMaskingLeftEar(){
+        executor.execute(() -> {
+            int sum = 0;
+            // Loop through gaps
+            for (int i = 0; i < 5; i++) {
+                // Loop through sounds
+                for (int j = 0; j < 3; ) {
+
+
+                    // Stop thread if application is tabbed or backed out of
+                    if (Thread.currentThread().isInterrupted()){
+                        return;
+                    }
+
+                    // Check if user have pressed/released the button four times.
+                    if (clicked == 6) {
+
+                        // Calculate the threshold
+                        for (int k = 0; k < 5; k++) {
+                            sum += values[k];
+                        }
+                        sum = sum/5;
+
+                        // Add threshold to array to be saved.
+                        thresholdTemporalValuesLeftEar[j][i] = sum;
+
+                        j++;
+                        clicked = 0;
+                        decibelLevel = 50;
+                        sum = 0;
+                        continue;
+                    }
+
+                    // Control if the user is pressing the button or not
+                    if (pressed && clicked < 2) {
+                        // Reduce the decibel level.
+                        decibelLevel -= 5;
+                    } else if (pressed && clicked >= 2) {
+                        decibelLevel -= 2;
+                    } else if (decibelLevel < 80 && clicked >= 2) {
+                        decibelLevel += 2;
+                    } else if (decibelLevel < 80) {
+                        // Increase the decibel level.
+                        decibelLevel += 5;
+                    }
+
+                    // Create the new wav file with correct decibel level on tone (ftm).
+                    combineWavFileTemporalMasking(noiseSounds[j], ftmTones[j], gaps[i], decibelLevel);
+                    playSoundLeftEar(pathWav);
+
+                    // Wait for mediaPlayer to finish.
+                    waitToFinish();
+                    // Sleep for the same time as gap length.
+                    SystemClock.sleep(gapTimes[i]);
+                }
+            }
+
+            // Will print out all the thresholds values.
+            MainActivity.this.runOnUiThread(() -> {
+                for (int i = 0; i < 3 ; i++) {
+                    for (int j = 0; j < 5; j++) {
+                        showToast(Integer.toString(thresholdTemporalValuesRightEar[i][j]));
+                    }
+                }
+
+                binding.pressButton.setVisibility(View.GONE);
+                binding.StartLeftAudioButton.setVisibility(View.VISIBLE);
+                binding.textField.setText("Audiometry, left ear");
+
+            });
+
+        });
+        handler.post(() -> {
+            //Do UI Thread work here
+
+        });
+    }
+
+    private void audiometryRightEar(){
+        executor.execute(() -> {
+            int sum = 0;
+            decibelLevel = 30;
+            // Loop through tones
+            for (int i = 0; i < 9; ) {
+
+                // Stop thread if application is tabbed or backed out of
+                if (Thread.currentThread().isInterrupted()){
+                    return;
+                }
+                
+                // Check if user have pressed/released the button four times.
+                if (clicked == 6) {
+
+                    // Calculate the threshold
+                    for (int k = 0; k < 5; k++) {
+                        sum += values[k];
+                    }
+                    sum = sum/5;
+
+                    // Add threshold to array to be saved.
+                    thresholdAudiometryRightEar[i] = sum;
+
+                    i++;
+                    clicked = 0;
+                    decibelLevel = 0;
+                    sum = 0;
+                    continue;
+                }
+
+                // Control if the user is pressing the button or not
+                if (pressed && clicked < 2) {
                     // Reduce the decibel level.
                     decibelLevel -= 5;
+                } else if (pressed && clicked >= 2) {
+                    decibelLevel -= 2;
+                } else if (decibelLevel < 80 && clicked >= 2) {
+                    decibelLevel += 2;
                 } else if (decibelLevel < 80) {
                     // Increase the decibel level.
                     decibelLevel += 5;
                 }
+
                 // Create the new wav file with correct decibel level on tone (ftm).
-                combineWavFile(R.raw.noise_500hz, R.raw.ftm_500hz, gap80ms, decibelLevel);
-                playSound(pathWav);
+                combineWavFileAudiometry(tones[i], gap1s, decibelLevel);
+                playSoundRightEar(pathWav);
+
                 // Wait for mediaPlayer to finish.
                 waitToFinish();
-                SystemClock.sleep(80);
+
             }
 
-            // Calculate the threshold
-            for (int i = 0; i < 4; i++) {
-                sum += values[i];
-            }
-            sum = sum/4;
-
-            // Print the threshold.
-            MainActivity.this.runOnUiThread(new Runnable() {
-                public void run() {
-                    showToast(Integer.toString(sum));
+            // Will print out all the thresholds values.
+            MainActivity.this.runOnUiThread(() -> {
+                for (int i = 0; i < 9 ; i++) {
+                    showToast(Integer.toString(thresholdAudiometryRightEar[i]));
                 }
+
+                binding.pressButton.setVisibility(View.GONE);
+                binding.StartTemporalButton.setVisibility(View.VISIBLE);
+                binding.textField.setText("Temporal masking, left ear");
+
             });
 
 
@@ -201,6 +435,137 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             //Do UI Thread work here
 
         });
+    }
+
+    private void audiometryLeftEar(){
+        executor.execute(() -> {
+            decibelLevel = 0;
+            int sum = 0;
+            // Loop through tones
+            for (int i = 0; i < 9; ) {
+
+                // Stop thread if application is tabbed or backed out of
+                if (Thread.currentThread().isInterrupted()){
+                    return;
+                }
+
+                // Check if user have pressed/released the button four times.
+                if (clicked == 6) {
+
+                    // Calculate the threshold
+                    for (int k = 0; k < 5; k++) {
+                        sum += values[k];
+                    }
+                    sum = sum/5;
+
+                    // Add threshold to array to be saved.
+                    thresholdAudiometryLeftEar[i] = sum;
+
+                    i++;
+                    clicked = 0;
+                    decibelLevel = 0;
+                    sum = 0;
+                    continue;
+                }
+
+                // Control if the user is pressing the button or not
+                if (pressed && clicked < 2) {
+                    // Reduce the decibel level.
+                    decibelLevel -= 5;
+                } else if (pressed && clicked >= 2) {
+                    decibelLevel -= 2;
+                } else if (decibelLevel < 80 && clicked >= 2) {
+                    decibelLevel += 2;
+                } else if (decibelLevel < 80) {
+                    // Increase the decibel level.
+                    decibelLevel += 5;
+                }
+
+                // Create the new wav file with correct decibel level on tone (ftm).
+                combineWavFileAudiometry(tones[i], gap1s, decibelLevel);
+                playSoundLeftEar(pathWav);
+
+                // Wait for mediaPlayer to finish.
+                waitToFinish();
+
+            }
+
+            // Will print out all the thresholds values.
+            MainActivity.this.runOnUiThread(() -> {
+                for (int i = 0; i < 9 ; i++) {
+                    showToast(Integer.toString(thresholdAudiometryRightEar[i]));
+                }
+
+                binding.pressButton.setVisibility(View.GONE);
+
+                binding.textField.setText("Done");
+
+            });
+
+            try {
+                saveArraysToFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        });
+        handler.post(() -> {
+            //Do UI Thread work here
+
+        });
+    }
+
+    private void saveArraysToFile() throws IOException {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 5; j++) {
+                builder.append(thresholdTemporalValuesRightEar[i][j]+"");
+                if (j < 5) {
+                    builder.append(",");
+                }
+            }
+        }
+        BufferedWriter writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/tempRightEar.txt"));
+        writer.write(builder.toString());
+        writer.close();
+
+        builder.setLength(0);
+
+        for (int i = 0; i < 9; i++) {
+            builder.append(thresholdAudiometryRightEar[i]+"");
+            if (i < 9) {
+                builder.append(",");
+            }
+        }
+        writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/audioRightEar.txt"));
+        writer.write(builder.toString());
+        writer.close();
+
+        builder.setLength(0);
+
+        for (int i = 0; i < 9; i++) {
+            builder.append(thresholdAudiometryLeftEar[i]+"");
+            if (i < 9) {
+                builder.append(",");
+            }
+        }
+        writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/audioLeftEar.txt"));
+        writer.write(builder.toString());
+        writer.close();
+
+        builder.setLength(0);
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 5; j++) {
+                builder.append(thresholdTemporalValuesLeftEar[i][j]+"");
+                if (j < 5) {
+                    builder.append(",");
+                }
+            }
+        }
+        writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/tempLeftEar.txt"));
+        writer.write(builder.toString());
+        writer.close();
     }
 
     /**
@@ -218,19 +583,19 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
      * @param tone The tone file.
      * @param gap The gap that is going to be between noise and tone.
      */
-    public void combineWavFile(@RawRes int noise, @RawRes int tone, byte[] gap, int dB) {
+    public void combineWavFileTemporalMasking(@RawRes int noise, @RawRes int tone, byte[] gap, int dB) {
         try {
-
+            int read = 0;
             // Read the byte's from noiseWav to byte[].
             InputStream is = getResources().openRawResource(noise);
             byte[] wavData = new byte[is.available()];
-            is.read(wavData);
+            read = is.read(wavData);
             is.close();
 
             // Read the byte's from toneWav to byte[].
             InputStream toneIs = getResources().openRawResource(tone);
             byte[] toneArray = new byte[toneIs.available()];
-            toneIs.read(toneArray);
+            read = toneIs.read(toneArray);
             toneIs.close();
 
             // Adjust the intensity of the tone with the correct decibel value.
@@ -242,6 +607,59 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             byteBuffer.put(wavData, 44, wavData.length - 44);
             byteBuffer.put(gap);
             byteBuffer.put(toneArray, 46, toneArray.length - 46);
+
+            // Set the size of the data chunk and size of the full size of the file.
+            waveHeader.setSubChunk2Size(combined.length);
+            waveHeader.setChunkSize();
+
+            // Create a new header and store it in a byte[].
+            byte[] bytes = waveHeader.createWaveHeader();
+
+            // Write header and the combined sounds to one byte[].
+            ByteArrayOutputStream out = new ByteArrayOutputStream( );
+            out.write(bytes);
+            out.write(combined);
+            byte[] sound = out.toByteArray();
+            out.flush();
+            out.close();
+
+            File file = new File(pathWav);
+
+            // Check if file exists otherwise create file.
+            if (!file.exists()) {
+                Boolean value = file.createNewFile();
+            }
+
+            // Write to file.
+            FileOutputStream stream = new FileOutputStream(pathWav);
+            stream.write(sound);
+            stream.close();
+
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+
+    }
+
+    public void combineWavFileAudiometry(@RawRes int tone, byte[] gap, int dB) {
+        try {
+            int read = 0;
+
+            // Read the byte's from toneWav to byte[].
+            InputStream toneIs = getResources().openRawResource(tone);
+            byte[] toneArray = new byte[toneIs.available()];
+            read = toneIs.read(toneArray);
+            toneIs.close();
+
+            // Adjust the intensity of the tone with the correct decibel value.
+            toneArray = adjustVolume(toneArray, dB);
+
+            // Create a new byte[] and store noise, gap and tone in it without a header.
+            byte[] combined = new byte[gap.length + toneArray.length - 46];
+            ByteBuffer byteBuffer = ByteBuffer.wrap(combined);
+            byteBuffer.put(toneArray, 46, toneArray.length - 46);
+            byteBuffer.put(gap);
+
 
             // Set the size of the data chunk and size of the full size of the file.
             waveHeader.setSubChunk2Size(combined.length);
@@ -312,10 +730,13 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     @Override
     protected void onPause() {
         super.onPause();
+        executor.shutdownNow();
+
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        executor.shutdownNow();
     }
 }

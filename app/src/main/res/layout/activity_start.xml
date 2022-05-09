@@ -22,7 +22,7 @@
             android:layout_marginRight="@dimen/_25sdp"
             android:textColor="@color/black"
             android:layout_gravity="center"
-            android:textSize="@dimen/_15sdp"
+            android:textSize="@dimen/_12sdp"
             android:text="The first test will be a temporal masking. The test will be playing a noise followed by a gap that is a certain amount of time long. After the gap a ftm tone will be played. If you can hear the ftm tone you will be pressing a button and holding it down until you cant hear the ftm tone any more and will then release the button."/>
 
         <TextView
@@ -33,7 +33,7 @@
             android:layout_marginRight="@dimen/_25sdp"
             android:textColor="@color/black"
             android:layout_gravity="center"
-            android:textSize="@dimen/_15sdp"
+            android:textSize="@dimen/_12sdp"
             android:text="The second test will be a standard audiometry test. The test will be playing a tone followed by a gap that is the same length as the tone. If you can hear the tone you will be pressing the button and holding it down until you cant hear the tone anymore and will then release the button."/>
 
         <TextView
@@ -44,7 +44,7 @@
             android:layout_marginRight="@dimen/_25sdp"
             android:textColor="@color/black"
             android:layout_gravity="center"
-            android:textSize="@dimen/_15sdp"
+            android:textSize="@dimen/_12sdp"
             android:text="You can test the noise and tone by pressing the buttons (noise, tone)."/>
 
         <com.google.android.material.button.MaterialButton

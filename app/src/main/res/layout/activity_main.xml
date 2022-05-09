@@ -1,45 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/white"
     android:clipToPadding="false"
+    android:orientation="vertical"
     android:overScrollMode="never"
     android:padding="@dimen/_24sdp"
     android:scrollbars="none"
-    android:background="@color/white"
     tools:context=".activities.MainActivity">
 
-    <LinearLayout
+
+    <TextView
+        android:id="@+id/textField"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="31dp"
+        android:gravity="center"
+        android:text="Temporal masking, Right ear"
+        android:textColor="@color/black"
+        android:textSize="@dimen/_15sdp"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:layout_editor_absoluteX="64dp" />
+
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/StartButton"
+        android:layout_width="@dimen/_120sdp"
+        android:layout_height="@dimen/_120sdp"
         android:layout_gravity="center"
-        android:orientation="vertical">
+        android:layout_marginTop="526dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/roundedbutton"
+        android:contentDescription="@null"
+        android:text="@string/start"
+        app:cornerRadius="@dimen/_70sdp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/pressButton"
+        android:layout_width="@dimen/_120sdp"
+        android:layout_height="@dimen/_120sdp"
+        android:layout_gravity="center"
+        android:layout_marginTop="526dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/roundedbutton"
+        android:contentDescription="@null"
+        android:text="@string/press"
+        app:cornerRadius="@dimen/_70sdp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/StartAudioButton"
+        android:layout_width="@dimen/_120sdp"
+        android:layout_height="@dimen/_120sdp"
+        android:layout_gravity="center"
+        android:layout_marginTop="526dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/roundedbutton"
+        android:contentDescription="@null"
+        android:text="@string/start"
+        app:cornerRadius="@dimen/_70sdp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/StartTemporalButton"
+        android:layout_width="@dimen/_120sdp"
+        android:layout_height="@dimen/_120sdp"
+        android:layout_gravity="center"
+        android:layout_marginTop="526dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/roundedbutton"
+        android:contentDescription="@null"
+        android:text="@string/start"
+        app:cornerRadius="@dimen/_70sdp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/StartLeftAudioButton"
+        android:layout_width="@dimen/_120sdp"
+        android:layout_height="@dimen/_120sdp"
+        android:layout_gravity="center"
+        android:layout_marginTop="526dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/roundedbutton"
+        android:contentDescription="@null"
+        android:text="@string/start"
+        app:cornerRadius="@dimen/_70sdp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/StartButton"
-            android:layout_width="@dimen/_120sdp"
-            android:layout_height="@dimen/_120sdp"
-            android:text="@string/start"
-            android:layout_marginTop="@dimen/_150sdp"
-            android:background="@drawable/roundedbutton"
-            android:layout_gravity="center"
-            app:cornerRadius="@dimen/_70sdp"
-            android:contentDescription="@null"/>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/pressButton"
-            android:layout_width="@dimen/_120sdp"
-            android:layout_height="@dimen/_120sdp"
-            android:layout_marginTop="@dimen/_50sdp"
-            android:layout_gravity="center"
-            android:text="@string/press"
-            android:visibility="gone"
-            android:background="@drawable/roundedbutton"
-            android:contentDescription="@null"/>
-
-    </LinearLayout>
-
-</ScrollView>
+</androidx.constraintlayout.widget.ConstraintLayout>

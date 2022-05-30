@@ -13,11 +13,49 @@
     tools:context=".activities.MainActivity">
 
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_50sdp"
+        app:layout_constraintTop_toTopOf="parent"
+        android:orientation="horizontal"
+        android:weightSum="1">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight=".6"
+            android:background="@color/black">
+
+            <Spinner
+                android:id="@+id/idSpinnerBTPairedDevices"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+            </Spinner>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight=".4">
+
+            <Button
+                android:id="@+id/idButtonConnect"
+                android:text="@string/connect"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+            </Button>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
     <TextView
         android:id="@+id/textField"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="31dp"
+        android:layout_marginTop="@dimen/_80sdp"
         android:gravity="center"
         android:text="Temporal masking, Right ear"
         android:textColor="@color/black"

@@ -1,8 +1,14 @@
 package com.example.hearingtest.activities;
 
+
+import androidx.annotation.NonNull;
 import androidx.annotation.RawRes;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.content.Context;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -10,9 +16,12 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Toast;
 
 import com.example.hearingtest.R;
@@ -26,17 +35,22 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnTouchListener {
 
+    private static final String Tag = "DEBUG_BT";
+
     private ActivityMainBinding binding;
     private MediaPlayer mediaPlayer;
     private ExecutorService executor;
-    private Handler handler;
     private String pathWav;
     private WaveHeader waveHeader;
     private AudioManager audioManager;
@@ -55,6 +69,27 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private static int[] thresholdAudiometryRightEar;
     private static int[] thresholdAudiometryLeftEar;
 
+    static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    BluetoothSocket BTSocket = null;
+    BluetoothAdapter BTAdapter = null;
+    Set<BluetoothDevice> BTPairedDevices = null;
+    boolean bBTConnected = false;
+    BluetoothDevice BTDevice = null;
+    classBTInitDataCommunication cBTInitSendReceive = null;
+
+    static public final int BT_CON_STATUS_NOT_CONNECTED = 0;
+    static public final int BT_CON_STATUS_CONNECTING = 1;
+    static public final int BT_CON_STATUS_CONNECTED = 2;
+    static public final int BT_CON_STATUS_FAILED = 3;
+    static public final int BT_CON_STATUS_CONNECTION_LOST = 4;
+    static public int iBTConnectionStatus = BT_CON_STATUS_NOT_CONNECTED;
+
+    static final int BT_STATE_LISTENING = 1;
+    static final int BT_STATE_CONNECTING = 2;
+    static final int BT_STATE_CONNECTED = 3;
+    static final int BT_STATE_CONNECTION_FAILED = 4;
+    static final int BT_STATE_MESSAGE_RECEIVED = 5;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -62,33 +97,250 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         setContentView(binding.getRoot());
         init();
         setListeners();
+
+        getBTPairedDevices();
+        populateSpinnerWithBTPairedDevices();
     }
+
 
     /**
      * Initialize listeners.
      */
     private void setListeners() {
         binding.pressButton.setOnTouchListener(this);
-        binding.StartButton.setOnClickListener(v -> {
-            binding.StartButton.setVisibility(View.INVISIBLE);
+        binding.StartButton.setOnClickListener(v -> MainActivity.this.runOnUiThread(() -> {
+            Log.i(Tag, "button pressed");
+            sendMessage();
+            /*binding.StartButton.setVisibility(View.INVISIBLE);
             binding.pressButton.setVisibility(View.VISIBLE);
-            temporalMaskingRightEar();
-        });
-        binding.StartAudioButton.setOnClickListener(v -> {
+            temporalMaskingRightEar();*/
+        }));
+        binding.StartAudioButton.setOnClickListener(v -> MainActivity.this.runOnUiThread(() -> {
             binding.StartAudioButton.setVisibility(View.GONE);
             binding.pressButton.setVisibility(View.VISIBLE);
             audiometryRightEar();
-        });
-        binding.StartTemporalButton.setOnClickListener(v -> {
+        }));
+        binding.StartTemporalButton.setOnClickListener(v -> MainActivity.this.runOnUiThread(() -> {
             binding.StartTemporalButton.setVisibility(View.GONE);
             binding.pressButton.setVisibility(View.VISIBLE);
             temporalMaskingLeftEar();
-        });
-        binding.StartLeftAudioButton.setOnClickListener(v -> {
+        }));
+        binding.StartLeftAudioButton.setOnClickListener(v -> MainActivity.this.runOnUiThread(() -> {
             binding.StartLeftAudioButton.setVisibility(View.GONE);
             binding.pressButton.setVisibility(View.VISIBLE);
             audiometryLeftEar();
+        }));
+        binding.idButtonConnect.setOnClickListener(V -> {
+            Log.d(Tag, "Button Clicked buttonConnect");
+            if (bBTConnected == false) {
+                if (binding.idSpinnerBTPairedDevices.getSelectedItemPosition() == 0) {
+                    Log.d(Tag, "Select a device");
+                    showToast("Select a device");
+                    return;
+                }
+
+                String selectedDevice = binding.idSpinnerBTPairedDevices.getSelectedItem().toString();
+                Log.d(Tag, "Selected device = " + selectedDevice);
+
+                for (BluetoothDevice BTDev : BTPairedDevices) {
+                    if (selectedDevice.equals(BTDev.getName())) {
+                        BTDevice = BTDev;
+                        Log.d(Tag, "Selected device UUID = " + BTDevice.getAddress());
+
+                        cBluetoothConnect cBTConnect = new cBluetoothConnect(BTDevice);
+                        cBTConnect.start();
+                    }
+                }
+            } else {
+                Log.d(Tag, "Disconnecting BTConnection");
+                try {
+                    BTSocket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    Log.e(Tag, e.getMessage());
+                }
+                binding.idButtonConnect.setText("Connect");
+                bBTConnected = false;
+            }
         });
+    }
+
+    private void getBTPairedDevices() {
+        Log.d(Tag, "getBTPairedDevices - Start");
+        BTAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (BTAdapter == null) {
+            Log.e(Tag, "getBTPairedDevices - BTAdapter null");
+            showToast("No bluetooth on this device");
+            return;
+        } else if (!BTAdapter.isEnabled()) {
+            Log.e(Tag, "getBTPairedDevices - BT not enable");
+            showToast("Turn on Bluetooth");
+            return;
+        }
+
+        BTPairedDevices = BTAdapter.getBondedDevices();
+        Log.d(Tag, "getBTPairedDevices - Paired devices count " + BTPairedDevices.size());
+
+        for (BluetoothDevice BTDevice : BTPairedDevices) {
+            Log.d(Tag, BTDevice.getName() + ", " + BTDevice.getAddress());
+        }
+    }
+
+    private void populateSpinnerWithBTPairedDevices() {
+        ArrayList<String> alPairedDevices = new ArrayList<>();
+        alPairedDevices.add("Select");
+
+        for (BluetoothDevice BTDev : BTPairedDevices) {
+            alPairedDevices.add(BTDev.getName());
+        }
+
+        final ArrayAdapter<String> aaPairedDevices = new ArrayAdapter<String>(this,
+                androidx.appcompat.R.layout.support_simple_spinner_dropdown_item, alPairedDevices);
+        aaPairedDevices.setDropDownViewResource(androidx.appcompat.R.layout.support_simple_spinner_dropdown_item);
+        binding.idSpinnerBTPairedDevices.setAdapter(aaPairedDevices);
+    }
+
+    public class cBluetoothConnect extends Thread {
+        private BluetoothDevice device;
+
+        public cBluetoothConnect(BluetoothDevice BTDevice) {
+            Log.i(Tag, "classBTConnect - start");
+            device = BTDevice;
+
+            try {
+                BTSocket = device.createRfcommSocketToServiceRecord(MY_UUID);
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(Tag, "classBTConnect - e = " + e.getMessage());
+            }
+            Log.i(Tag, "classBTConnect - got socket");
+        }
+
+        public void run() {
+            Log.i(Tag, "classBTConnect - run");
+            try {
+                BTSocket.connect();
+                Message message = Message.obtain();
+                message.what = BT_STATE_CONNECTED;
+                handler.sendMessage(message);
+                Log.i(Tag, "classBTConnect - run : " + message.what);
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(Tag, "classBTConnect - run, e = " + e.getMessage());
+                Message message = Message.obtain();
+                message.what = BT_STATE_CONNECTION_FAILED;
+                handler.sendMessage(message);
+            }
+        }
+    }
+
+    public class classBTInitDataCommunication extends Thread {
+        private final BluetoothSocket bluetoothSocket;
+        private InputStream inputStream = null;
+        private OutputStream outputStream = null;
+
+        public classBTInitDataCommunication(BluetoothSocket socket) {
+            Log.i(Tag, "classBTInitDataCommunication - start");
+
+            bluetoothSocket = socket;
+
+            try {
+                inputStream = bluetoothSocket.getInputStream();
+                outputStream = bluetoothSocket.getOutputStream();
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(Tag, "classBTInitDataCommunication - start, e = " + e.getMessage());
+            }
+        }
+
+        public void run() {
+            byte[] buffer = new byte[1024];
+            int bytes;
+
+            while (BTSocket.isConnected()) {
+                try {
+                    bytes = inputStream.read(buffer);
+                    handler.obtainMessage(BT_STATE_MESSAGE_RECEIVED, bytes, -1, buffer)
+                            .sendToTarget();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    Log.e(Tag, "BT disconnect from device end, e = " + e.getMessage());
+                    iBTConnectionStatus = BT_CON_STATUS_CONNECTION_LOST;
+                    try {
+                        Log.d(Tag, "Disconnecting BTConnection");
+                        if (BTSocket != null && BTSocket.isConnected()) {
+                            BTSocket.close();
+                        }
+                        binding.idButtonConnect.setText("Connect");
+                        bBTConnected = false;
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                        Log.e(Tag, "classBTInitDataCommunication - run, e = " + e.getMessage());
+                    }
+                }
+            }
+        }
+
+        public void write(byte[] bytes) {
+            try {
+                outputStream.write(bytes);
+                Log.d(Tag, "Sending message");
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(Tag, "sending failed = " + e.getMessage());
+            }
+        }
+    }
+
+    Handler handler = new Handler(new Handler.Callback() {
+        @Override
+        public boolean handleMessage(@NonNull Message msg) {
+            switch (msg.what) {
+                case BT_STATE_LISTENING:
+                    Log.d(Tag, "BT_STATE_ LISTENING");
+                    break;
+                case BT_STATE_CONNECTING:
+                    iBTConnectionStatus = BT_CON_STATUS_CONNECTING;
+                    binding.idButtonConnect.setText("Connecting..");
+                    Log.d(Tag, "BT_STATE_CONNECTING");
+                    break;
+                case BT_STATE_CONNECTED:
+                    iBTConnectionStatus = BT_CON_STATUS_CONNECTED;
+                    binding.idButtonConnect.setText("Disconnect");
+
+                    cBTInitSendReceive = new classBTInitDataCommunication(BTSocket);
+                    cBTInitSendReceive.start();
+
+                    bBTConnected = true;
+                    break;
+                case BT_STATE_CONNECTION_FAILED:
+                    iBTConnectionStatus = BT_CON_STATUS_FAILED;
+                    Log.d(Tag, "BT_STATE_CONNECTION_FAILED");
+                    bBTConnected = false;
+                    break;
+                case BT_STATE_MESSAGE_RECEIVED:
+                    byte[] readBuffer = (byte[])msg.obj;
+                    String tempMsg = new String(readBuffer, 0, msg.arg1);
+                    Log.d(Tag, "Message received ( " + tempMsg.length() + " ) Data : " + tempMsg);
+                    break;
+            }
+
+            return true;
+        }
+    });
+
+    public void sendMessage() {
+        Log.i(Tag, "Sending message");
+        if (BTSocket != null && iBTConnectionStatus == BT_CON_STATUS_CONNECTED) {
+            if (BTSocket.isConnected()) {
+
+                String string = "hello";
+                cBTInitSendReceive.write(string.getBytes());
+
+            } else {
+                showToast("Connect to device");
+            }
+        }
     }
 
     /**
@@ -97,7 +349,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private void init() {
         mediaPlayer = new MediaPlayer();
         executor = Executors.newSingleThreadExecutor();
-        handler = new Handler(Looper.getMainLooper());
         pathWav = "/storage/emulated/0/Download/test.wav";
         waveHeader = new WaveHeader();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
@@ -105,7 +356,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         decibelLevel = 50;
         values = new int[5];
         noiseSounds = new int[]{R.raw.noise_500hz, R.raw.noise_2000hz, R.raw.noise_4000hz};
-        ftmTones = new int[]{R.raw.ftm_500hz, R.raw.ftm_2000hz, R.raw.noise_4000hz};
+        ftmTones = new int[]{R.raw.ftm_500hz, R.raw.ftm_2000hz, R.raw.ftm_4000hz};
         tones = new int[]{R.raw.tone_1000hz, R.raw.tone_2000hz, R.raw.tone_3000hz,
                 R.raw.tone_4000hz, R.raw.tone_6000hz, R.raw.tone_8000hz, R.raw.tone_1000hz,
                 R.raw.tone_500hz, R.raw.tone_250hz
@@ -122,6 +373,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         thresholdTemporalValuesLeftEar = new int[3][5];
         thresholdAudiometryRightEar = new int[9];
         thresholdAudiometryLeftEar = new int[9];
+
+
     }
 
     /**
@@ -134,6 +387,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
     /**
      * Will release the last mediaPlayer and create a new one and play the sound.
+     * Will play the sound on the right ear.
      * @param path take the path of the sound file
      */
     private void playSoundRightEar(String path) {
@@ -143,6 +397,11 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         mediaPlayer.start();
     }
 
+    /**
+     * Will release the last mediaPlayer and create a new one and play the sound.
+     * Will play the sound on the left ear.
+     * @param path take the path of the sound file
+     */
     private void playSoundLeftEar(String path) {
         mediaPlayer.release();
         mediaPlayer = MediaPlayer.create(this, Uri.parse(path));
@@ -171,20 +430,24 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     @Override
     public boolean onTouch(View v, MotionEvent event) {
 
+        // Check if the user pressed or released the button
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             pressed = true;
+            // Control so it don't save values outside the bound of array
             if (clicked < 6) {
+                // If it is the first click don't save it.
                 if (clicked != 0) {
                     values[clicked - 1] = decibelLevel;
                 }
                 clicked++;
             }
 
-
         } else if (event.getAction() == MotionEvent.ACTION_UP) {
             v.performClick();
             pressed = false;
+            // Control so it don't save values outside the bound of array
             if (clicked < 6) {
+                // If it is the first click don't save it. Should not happen.
                 if (clicked != 0) {
                     values[clicked - 1] = decibelLevel;
                 }
@@ -205,6 +468,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     /**
      * The main program for temporalMasking right ear
      */
+    @SuppressLint("SetTextI18n")
     private void temporalMaskingRightEar(){
         executor.execute(() -> {
             int sum = 0;
@@ -220,7 +484,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                         return;
                     }
 
-                    // Check if user have pressed/released the button four times.
+                    // Check if user have pressed/released the button six times.
                     if (clicked == 6) {
 
                         // Calculate the threshold
@@ -229,7 +493,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                         }
                         sum = sum/5;
 
-                        // Add threshold to array to be saved.
+                        // Save threshold value to array.
                         thresholdTemporalValuesRightEar[j][i] = sum;
 
                         j++;
@@ -243,7 +507,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     if (pressed && clicked < 2) {
                         // Reduce the decibel level.
                         decibelLevel -= 5;
-                    } else if (pressed && clicked >= 2) {
+                    } else if (pressed) {
                         decibelLevel -= 2;
                     } else if (decibelLevel < 80 && clicked >= 2) {
                         decibelLevel += 2;
@@ -265,11 +529,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             // Will print out all the thresholds values.
             MainActivity.this.runOnUiThread(() -> {
-                for (int i = 0; i < 3 ; i++) {
-                    for (int j = 0; j < 5; j++) {
-                        showToast(Integer.toString(thresholdTemporalValuesRightEar[i][j]));
-                    }
-                }
 
                 binding.pressButton.setVisibility(View.GONE);
                 binding.StartAudioButton.setVisibility(View.VISIBLE);
@@ -286,21 +545,25 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         });
     }
 
+    /**
+     * The main program for temporalMasking left ear
+     */
+    @SuppressLint("SetTextI18n")
     private void temporalMaskingLeftEar(){
         executor.execute(() -> {
             int sum = 0;
+            decibelLevel = 50;
             // Loop through gaps
             for (int i = 0; i < 5; i++) {
                 // Loop through sounds
                 for (int j = 0; j < 3; ) {
-
 
                     // Stop thread if application is tabbed or backed out of
                     if (Thread.currentThread().isInterrupted()){
                         return;
                     }
 
-                    // Check if user have pressed/released the button four times.
+                    // Check if user have pressed/released the button six times.
                     if (clicked == 6) {
 
                         // Calculate the threshold
@@ -309,7 +572,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                         }
                         sum = sum/5;
 
-                        // Add threshold to array to be saved.
+                        // Save threshold value to array.
                         thresholdTemporalValuesLeftEar[j][i] = sum;
 
                         j++;
@@ -323,7 +586,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     if (pressed && clicked < 2) {
                         // Reduce the decibel level.
                         decibelLevel -= 5;
-                    } else if (pressed && clicked >= 2) {
+                    } else if (pressed) {
                         decibelLevel -= 2;
                     } else if (decibelLevel < 80 && clicked >= 2) {
                         decibelLevel += 2;
@@ -345,11 +608,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             // Will print out all the thresholds values.
             MainActivity.this.runOnUiThread(() -> {
-                for (int i = 0; i < 3 ; i++) {
-                    for (int j = 0; j < 5; j++) {
-                        showToast(Integer.toString(thresholdTemporalValuesRightEar[i][j]));
-                    }
-                }
 
                 binding.pressButton.setVisibility(View.GONE);
                 binding.StartLeftAudioButton.setVisibility(View.VISIBLE);
@@ -364,6 +622,11 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         });
     }
 
+
+    /**
+     * The main program for audiometry right ear
+     */
+    @SuppressLint("SetTextI18n")
     private void audiometryRightEar(){
         executor.execute(() -> {
             int sum = 0;
@@ -376,7 +639,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     return;
                 }
                 
-                // Check if user have pressed/released the button four times.
+                // Check if user have pressed/released the button six times.
                 if (clicked == 6) {
 
                     // Calculate the threshold
@@ -385,7 +648,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     }
                     sum = sum/5;
 
-                    // Add threshold to array to be saved.
+                    // Save threshold value to array.
                     thresholdAudiometryRightEar[i] = sum;
 
                     i++;
@@ -399,7 +662,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 if (pressed && clicked < 2) {
                     // Reduce the decibel level.
                     decibelLevel -= 5;
-                } else if (pressed && clicked >= 2) {
+                } else if (pressed) {
                     decibelLevel -= 2;
                 } else if (decibelLevel < 80 && clicked >= 2) {
                     decibelLevel += 2;
@@ -419,9 +682,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             // Will print out all the thresholds values.
             MainActivity.this.runOnUiThread(() -> {
-                for (int i = 0; i < 9 ; i++) {
-                    showToast(Integer.toString(thresholdAudiometryRightEar[i]));
-                }
 
                 binding.pressButton.setVisibility(View.GONE);
                 binding.StartTemporalButton.setVisibility(View.VISIBLE);
@@ -437,6 +697,10 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         });
     }
 
+    /**
+     * The main program for audiometry left ear
+     */
+    @SuppressLint("SetTextI18n")
     private void audiometryLeftEar(){
         executor.execute(() -> {
             decibelLevel = 0;
@@ -449,7 +713,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     return;
                 }
 
-                // Check if user have pressed/released the button four times.
+                // Check if user have pressed/released the button six times.
                 if (clicked == 6) {
 
                     // Calculate the threshold
@@ -458,7 +722,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     }
                     sum = sum/5;
 
-                    // Add threshold to array to be saved.
+                    // Save threshold value to array.
                     thresholdAudiometryLeftEar[i] = sum;
 
                     i++;
@@ -472,7 +736,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 if (pressed && clicked < 2) {
                     // Reduce the decibel level.
                     decibelLevel -= 5;
-                } else if (pressed && clicked >= 2) {
+                } else if (pressed) {
                     decibelLevel -= 2;
                 } else if (decibelLevel < 80 && clicked >= 2) {
                     decibelLevel += 2;
@@ -492,12 +756,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             // Will print out all the thresholds values.
             MainActivity.this.runOnUiThread(() -> {
-                for (int i = 0; i < 9 ; i++) {
-                    showToast(Integer.toString(thresholdAudiometryRightEar[i]));
-                }
-
                 binding.pressButton.setVisibility(View.GONE);
-
                 binding.textField.setText("Done");
 
             });
@@ -515,14 +774,16 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         });
     }
 
+    /**
+     * Will save down all the arrays to text file to be able to study the results from test persons.
+     * @throws IOException Will throw a IOException if it fails.
+     */
     private void saveArraysToFile() throws IOException {
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 5; j++) {
-                builder.append(thresholdTemporalValuesRightEar[i][j]+"");
-                if (j < 5) {
-                    builder.append(",");
-                }
+                builder.append(thresholdTemporalValuesRightEar[i][j]);
+                builder.append(",");
             }
         }
         BufferedWriter writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/tempRightEar.txt"));
@@ -532,10 +793,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         builder.setLength(0);
 
         for (int i = 0; i < 9; i++) {
-            builder.append(thresholdAudiometryRightEar[i]+"");
-            if (i < 9) {
-                builder.append(",");
-            }
+            builder.append(thresholdAudiometryRightEar[i]);
+            builder.append(",");
         }
         writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/audioRightEar.txt"));
         writer.write(builder.toString());
@@ -544,10 +803,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         builder.setLength(0);
 
         for (int i = 0; i < 9; i++) {
-            builder.append(thresholdAudiometryLeftEar[i]+"");
-            if (i < 9) {
-                builder.append(",");
-            }
+            builder.append(thresholdAudiometryLeftEar[i]);
+            builder.append(",");
         }
         writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/audioLeftEar.txt"));
         writer.write(builder.toString());
@@ -557,10 +814,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 5; j++) {
-                builder.append(thresholdTemporalValuesLeftEar[i][j]+"");
-                if (j < 5) {
-                    builder.append(",");
-                }
+                builder.append(thresholdTemporalValuesLeftEar[i][j]);
+                builder.append(",");
             }
         }
         writer = new BufferedWriter(new FileWriter("/storage/emulated/0/Download/tempLeftEar.txt"));
@@ -578,24 +833,27 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     /**
-     * Will combine noise, gap and tone to one wav file.
+     * Will combine noise, gap and tone to one wav file. Will also set the intensity of the ftm tone.
      * @param noise The noise file.
-     * @param tone The tone file.
+     * @param tone The ftm tone file.
      * @param gap The gap that is going to be between noise and tone.
+     * @param dB The new intensity of the ftm tone.
      */
     public void combineWavFileTemporalMasking(@RawRes int noise, @RawRes int tone, byte[] gap, int dB) {
         try {
-            int read = 0;
+            int read;
             // Read the byte's from noiseWav to byte[].
             InputStream is = getResources().openRawResource(noise);
             byte[] wavData = new byte[is.available()];
             read = is.read(wavData);
+            Log.i("MyActivity " + "wavData", String.valueOf(read));
             is.close();
 
             // Read the byte's from toneWav to byte[].
             InputStream toneIs = getResources().openRawResource(tone);
             byte[] toneArray = new byte[toneIs.available()];
             read = toneIs.read(toneArray);
+            Log.i("MyActivity " + "toneArray", String.valueOf(read));
             toneIs.close();
 
             // Adjust the intensity of the tone with the correct decibel value.
@@ -628,6 +886,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             // Check if file exists otherwise create file.
             if (!file.exists()) {
                 Boolean value = file.createNewFile();
+                Log.i("MyActivity " + "createFile", String.valueOf(value));
             }
 
             // Write to file.
@@ -641,14 +900,21 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
     }
 
+    /**
+     * Will combine tone and gap to one wav file and setting the intensity of tone.
+     * @param tone The tone file
+     * @param gap The gap that is going to be after the tone. Same length as tone 1s.
+     * @param dB The intensity of the tone.
+     */
     public void combineWavFileAudiometry(@RawRes int tone, byte[] gap, int dB) {
         try {
-            int read = 0;
+            int read;
 
             // Read the byte's from toneWav to byte[].
             InputStream toneIs = getResources().openRawResource(tone);
             byte[] toneArray = new byte[toneIs.available()];
             read = toneIs.read(toneArray);
+            Log.i("MyActivity " + "toneArray", String.valueOf(read));
             toneIs.close();
 
             // Adjust the intensity of the tone with the correct decibel value.
@@ -681,6 +947,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             // Check if file exists otherwise create file.
             if (!file.exists()) {
                 Boolean value = file.createNewFile();
+                Log.i("MyActivity " + "createFile", String.valueOf(value));
             }
 
             // Write to file.

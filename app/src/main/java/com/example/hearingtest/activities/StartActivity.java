@@ -1,16 +1,22 @@
 package com.example.hearingtest.activities;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RawRes;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import com.example.hearingtest.R;
 import com.example.hearingtest.adapters.WaveHeader;
@@ -31,6 +37,27 @@ public class StartActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         init();
         setListeners();
+        checkPermission();
+    }
+
+    private void checkPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) !=
+                PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(StartActivity.this, new String[]{
+                    Manifest.permission.BLUETOOTH_CONNECT}, 1);
+        }
+    }
+
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d("DEBUG_MA", "permission granted");
+            } else {
+                Log.e("DEBUG_MA", "permission denied");
+            }
+        }
     }
 
     /**
@@ -58,7 +85,7 @@ public class StartActivity extends AppCompatActivity {
         });
         binding.ftmButton.setOnClickListener(v -> {
             if (!mediaPlayer.isPlaying()) {
-                playSound(R.raw.ftm_500hz);
+                playSound(R.raw.ftm_4000hz);
             }
         });
         binding.nextButton.setOnClickListener(v -> {

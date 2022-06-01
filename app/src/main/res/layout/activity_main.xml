@@ -14,6 +14,8 @@
 
 
     <LinearLayout
+        android:id="@+id/Connection"
+        android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="@dimen/_50sdp"
         app:layout_constraintTop_toTopOf="parent"
@@ -141,6 +143,23 @@
         android:background="@drawable/roundedbutton"
         android:contentDescription="@null"
         android:text="@string/start"
+        app:cornerRadius="@dimen/_70sdp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/SendData"
+        android:layout_width="@dimen/_120sdp"
+        android:layout_height="@dimen/_120sdp"
+        android:layout_gravity="center"
+        android:layout_marginTop="526dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/roundedbutton"
+        android:contentDescription="@null"
+        android:text="Send"
         app:cornerRadius="@dimen/_70sdp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"

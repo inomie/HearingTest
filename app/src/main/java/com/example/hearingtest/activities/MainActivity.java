@@ -19,6 +19,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.util.Log;
+import android.util.Xml;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -36,8 +37,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -109,11 +112,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private void setListeners() {
         binding.pressButton.setOnTouchListener(this);
         binding.StartButton.setOnClickListener(v -> MainActivity.this.runOnUiThread(() -> {
-            Log.i(Tag, "button pressed");
-            sendMessage();
-            /*binding.StartButton.setVisibility(View.INVISIBLE);
+            binding.StartButton.setVisibility(View.INVISIBLE);
             binding.pressButton.setVisibility(View.VISIBLE);
-            temporalMaskingRightEar();*/
+            temporalMaskingRightEar();
         }));
         binding.StartAudioButton.setOnClickListener(v -> MainActivity.this.runOnUiThread(() -> {
             binding.StartAudioButton.setVisibility(View.GONE);
@@ -161,13 +162,30 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 }
                 binding.idButtonConnect.setText("Connect");
                 bBTConnected = false;
+                binding.SendData.setVisibility(View.GONE);
+            }
+        });
+        binding.SendData.setOnClickListener(v -> {
+
+            try {
+                sendMessage();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         });
     }
 
+    /**
+     * Will check if the phone has Bluetooth and if it is enabled.
+     * Then it will get all the paired devices.
+     */
     private void getBTPairedDevices() {
         Log.d(Tag, "getBTPairedDevices - Start");
+
+        // Get default adapter.
         BTAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        // Control if the device have Bluetooth or is enable.
         if (BTAdapter == null) {
             Log.e(Tag, "getBTPairedDevices - BTAdapter null");
             showToast("No bluetooth on this device");
@@ -178,6 +196,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             return;
         }
 
+        // Get the paired devices.
         BTPairedDevices = BTAdapter.getBondedDevices();
         Log.d(Tag, "getBTPairedDevices - Paired devices count " + BTPairedDevices.size());
 
@@ -186,23 +205,35 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         }
     }
 
+    /**
+     * The function will add the paired devices to the dropdown list.
+     */
     private void populateSpinnerWithBTPairedDevices() {
         ArrayList<String> alPairedDevices = new ArrayList<>();
         alPairedDevices.add("Select");
 
+        // Add all the paired devices on the phone.
         for (BluetoothDevice BTDev : BTPairedDevices) {
             alPairedDevices.add(BTDev.getName());
         }
 
+        // Add the devices to the dropdown list.
         final ArrayAdapter<String> aaPairedDevices = new ArrayAdapter<String>(this,
                 androidx.appcompat.R.layout.support_simple_spinner_dropdown_item, alPairedDevices);
         aaPairedDevices.setDropDownViewResource(androidx.appcompat.R.layout.support_simple_spinner_dropdown_item);
         binding.idSpinnerBTPairedDevices.setAdapter(aaPairedDevices);
     }
 
+    /**
+     * The class take care of the connection to the device.
+     */
     public class cBluetoothConnect extends Thread {
         private BluetoothDevice device;
 
+        /**
+         * Constructor
+         * @param BTDevice the device that Bluetooth going to connect to.
+         */
         public cBluetoothConnect(BluetoothDevice BTDevice) {
             Log.i(Tag, "classBTConnect - start");
             device = BTDevice;
@@ -216,6 +247,10 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             Log.i(Tag, "classBTConnect - got socket");
         }
 
+        /**
+         * Main program for Bluetooth connect thread.
+         * The program will connect to the Bluetooth socket.
+         */
         public void run() {
             Log.i(Tag, "classBTConnect - run");
             try {
@@ -234,11 +269,18 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         }
     }
 
+    /**
+     * The class will take care of receiving and sending data over Bluetooth.
+     */
     public class classBTInitDataCommunication extends Thread {
         private final BluetoothSocket bluetoothSocket;
         private InputStream inputStream = null;
         private OutputStream outputStream = null;
 
+        /**
+         * Constructor
+         * @param socket the socket for the Bluetooth device.
+         */
         public classBTInitDataCommunication(BluetoothSocket socket) {
             Log.i(Tag, "classBTInitDataCommunication - start");
 
@@ -253,10 +295,15 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             }
         }
 
+        /**
+         * Main program for data communication thread.
+         * This thread will listening for data over Bluetooth.
+         */
         public void run() {
             byte[] buffer = new byte[1024];
             int bytes;
 
+            // Receiving data from Bluetooth.
             while (BTSocket.isConnected()) {
                 try {
                     bytes = inputStream.read(buffer);
@@ -281,6 +328,10 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             }
         }
 
+        /**
+         * Sending the bytes over Bluetooth.
+         * @param bytes the data that is going to be sent.
+         */
         public void write(byte[] bytes) {
             try {
                 outputStream.write(bytes);
@@ -312,6 +363,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     cBTInitSendReceive.start();
 
                     bBTConnected = true;
+                    binding.SendData.setVisibility(View.VISIBLE);
                     break;
                 case BT_STATE_CONNECTION_FAILED:
                     iBTConnectionStatus = BT_CON_STATUS_FAILED;
@@ -329,18 +381,148 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         }
     });
 
-    public void sendMessage() {
+    /**
+     * The function will send all of the thresholds from the tests.
+     * @throws IOException
+     */
+    public void sendMessage() throws IOException {
         Log.i(Tag, "Sending message");
+        // Control so the application is connected.
         if (BTSocket != null && iBTConnectionStatus == BT_CON_STATUS_CONNECTED) {
             if (BTSocket.isConnected()) {
 
-                String string = "hello";
-                cBTInitSendReceive.write(string.getBytes());
+                // Convert temporal masking test thresholds to byte array.
+                byte[] Data = temporalDataToBytes(thresholdTemporalValuesRightEar);
+
+                // Send the data.
+                cBTInitSendReceive.write(Data);
+
+                // Convert temporal masking test thresholds to byte array.
+                Data = temporalDataToBytes(thresholdTemporalValuesLeftEar);
+
+                // Send the data.
+                cBTInitSendReceive.write(Data);
+
+                // Convert audiometry test thresholds to byte array.
+                Data = audiometryDataToBytes(thresholdAudiometryRightEar);
+
+                // Send the data
+                cBTInitSendReceive.write(Data);
+
+                // Convert audiometry test thresholds to byte array.
+                Data = audiometryDataToBytes(thresholdAudiometryLeftEar);
+
+                // Send the data
+                cBTInitSendReceive.write(Data);
 
             } else {
                 showToast("Connect to device");
             }
         }
+    }
+
+    /**
+     * The function will convert the integer array to an byte array loaded with frame work data.
+     * @param Data The array of data from audiometry test.
+     * @return A byte array with the frame work.
+     * @throws IOException
+     */
+    private byte[] audiometryDataToBytes(int[] Data) throws IOException {
+        // Data that is being stored in the byte array
+        byte[] start = "AA".getBytes();
+        // Tell what type it is.
+        byte[] data = "DA".getBytes();
+        // Length of the payload.
+        byte[] length = "9".getBytes();
+        // Tell the end of frame work.
+        byte[] stop = "EE".getBytes();
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+        // Add to outputStream.
+        output.write(start);
+        output.write(data);
+        output.write(length);
+
+        // Calculate the sum of the values and add the byte to outputStream.
+        int sum = 0;
+        for (int i = 0; i < 9; i++) {
+            sum += Data[i];
+            output.write((byte)Data[i]);
+        }
+
+        // Get the high bytes from the sum and add it to outputStream.
+        int HI = ((sum & 0xff) >> 8);
+        String sHI = Integer.toString(HI);
+        byte[] CSR_HI = sHI.getBytes();
+        output.write(CSR_HI);
+
+        // Get the low bytes from the sum and add it to outputStream.
+        int LOW = (sum & 0xff);
+        String sLOW = Integer.toString(LOW);
+        byte[] CSR_LOW = sLOW.getBytes();
+        output.write(CSR_LOW);
+
+        // Add the stop bytes.
+        output.write(stop);
+
+        // Convert outputStream to byteArray.
+        byte[] out = output.toByteArray();
+
+        return out;
+    }
+
+    /**
+     * The function will convert the integer array to an byte array loaded with frame work data.
+     * @param Data The array of data from temporal masking test.
+     * @return A byte array with the frame work.
+     * @throws IOException
+     */
+    private byte[] temporalDataToBytes(int[][] Data) throws IOException {
+        // Data that is being stored in the byte array
+        byte[] start = "AA".getBytes();
+        // Tell what type it is.
+        byte[] data = "DA".getBytes();
+        // Length of the payload.
+        byte[] length = "15".getBytes();
+        // Tell the end of frame work.
+        byte[] stop = "EE".getBytes();
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+        // Add to outputStream.
+        output.write(start);
+        output.write(data);
+        output.write(length);
+
+        // Calculate the sum of the values and add the byte to outputStream.
+        int sum = 0;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 5; j++) {
+                sum += Data[i][j];
+                output.write((byte)Data[i][j]);
+            }
+        }
+
+        // Get the high bytes from the sum and add it to outputStream.
+        int HI = ((sum & 0xff) >> 8);
+        String sHI = Integer.toString(HI);
+        byte[] CSR_HI = sHI.getBytes();
+        output.write(CSR_HI);
+
+        // Get the low bytes from the sum and add it to outputStream.
+        int LOW = (sum & 0xff);
+        String sLOW = Integer.toString(LOW);
+        byte[] CSR_LOW = sLOW.getBytes();
+        output.write(CSR_LOW);
+
+        // Add the stop bytes.
+        output.write(stop);
+
+        // Convert outputStream to byteArray.
+        byte[] out = output.toByteArray();
+
+        return out;
     }
 
     /**
@@ -757,7 +939,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             // Will print out all the thresholds values.
             MainActivity.this.runOnUiThread(() -> {
                 binding.pressButton.setVisibility(View.GONE);
-                binding.textField.setText("Done");
+                binding.textField.setText("Connect to the deice and then send data");
+                binding.Connection.setVisibility(View.VISIBLE);
 
             });
 

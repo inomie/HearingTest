@@ -7,6 +7,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -17,6 +18,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.example.hearingtest.R;
 import com.example.hearingtest.adapters.WaveHeader;
@@ -70,9 +72,18 @@ public class StartActivity extends AppCompatActivity {
     }
 
     /**
+     * Will show the Toast message on screen.
+     * @param message the message that will be printed
+     */
+    private void showToast(String message) {
+        Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
+    }
+
+    /**
      * Initialize listeners.
      */
     private void setListeners() {
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         binding.noiseButton.setOnClickListener(v -> {
             if (!mediaPlayer.isPlaying()) {
                 playSound(R.raw.noise_500hz);
@@ -89,8 +100,16 @@ public class StartActivity extends AppCompatActivity {
             }
         });
         binding.nextButton.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MainActivity.class);
-            startActivity(intent);
+            if (mBluetoothAdapter == null) {
+                showToast("Device don't have bluetooth");
+                finish();
+            } else if (!mBluetoothAdapter.isEnabled()) {
+                showToast("Start Bluetooth before going to next page");
+            } else {
+                Intent intent = new Intent(this, MainActivity.class);
+                startActivity(intent);
+            }
+
         });
 
     }

@@ -14,6 +14,7 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -531,7 +532,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private void init() {
         mediaPlayer = new MediaPlayer();
         executor = Executors.newSingleThreadExecutor();
-        pathWav = "/storage/emulated/0/Download/test.wav";
+        pathWav = "/storage/emulated/0/Download/HearingTestSound.wav";
         waveHeader = new WaveHeader();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         setMaxVolume();
@@ -1076,6 +1077,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             FileOutputStream stream = new FileOutputStream(pathWav);
             stream.write(sound);
             stream.close();
+
+
 
         } catch (Exception e){
             e.printStackTrace();
